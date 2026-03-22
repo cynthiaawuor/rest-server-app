@@ -1,0 +1,165 @@
+# openapi.yaml
+
+openapi: 3.0.3 # Specifies the OpenAPI version
+
+# General information about your API
+info:
+  title: Task Manager API
+  description: A simple API for managing tasks
+  version: 1.0.0
+
+# Server URL where the API is hosted
+servers:
+  - url: http://localhost:3000
+    description: Local development
+
+# API endpoints are defined here
+paths:
+  # Endpoints for listing and creating tasks
+
+  /tasks:
+    get:
+      operationId: getAllTasks
+      summary: List all tasks
+      description: Returns a list of tasks created by user
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                    summary:
+                      type: string
+                    details:
+                      type: string
+                    completed:
+                      type: boolean
+        "404":
+          description: "Not Found"
+
+    post:
+      operationId: createTask
+      summary: Create a new task
+      description: Creates a new task with the provided details
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id:
+                  type: integer
+                summary:
+                  type: string
+                details:
+                  type: string
+                  nullable: true
+                completed:
+                  type: boolean
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  summary:
+                    type: string
+                  details:
+                    type: string
+                    nullable: true
+                  completed:
+                    type: boolean
+        "422":
+          description: Summary is required
+
+  # Endpoint for single task operations
+  /tasks/{id}:
+    parameters:
+      # Path parameter shared by all methods on this path
+      - name: id
+        in: path
+        required: true
+        description: Unique task identifier
+        schema:
+          type: integer
+          example: 1772393379675
+
+    get:
+      operationId: getTaskById
+      summary: Get task by ID
+      description: Retrieve task details
+      responses:
+        "200":
+          description: Task details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  summary:
+                    type: string
+                  details:
+                    type: string
+                  completed:
+                    type: boolean
+        "404":
+          description: Task Not Found
+
+    patch:
+      operationId: updateTask
+      summary: Update a task
+      description: Updates only specific task fields
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                summary:
+                  type: string
+                details:
+                  type: string
+                completed:
+                  type: boolean
+      responses:
+        "202":
+          description: Task updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  summary:
+                    type: string
+                  details:
+                    type: string
+                  completed:
+                    type: boolean
+        "404":
+          description: Task Not Found
+
+    delete:
+      operationId: deleteTask
+      summary: Delete a task
+      description: Permanently deletes task
+      responses:
+        "204":
+          description: Task deleted successfully
+        "404":
+          description: Task Not Found

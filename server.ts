@@ -1,6 +1,8 @@
 import express from "express";
 import fs from "fs";
-import Task from "./types/task";
+import type Task from "./types/task.js";
+import swaggerUi from "swagger-ui-express";
+import YAML from "yamljs";
 
 function readTasksFromJson() {
   const raw = fs.readFileSync("./data/task.json").toString();
@@ -12,8 +14,11 @@ function writeTasksToJson(tasks: Task[]) {
 }
 
 const app = express();
-
+const spec = YAML.load("./openapi.yaml");
 app.use(express.json());
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(spec));
+
+app.get("/openapi.json", (req, res) => res.json(spec));
 
 app.get("/tasks", (req, res) => res.type("json").send(readTasksFromJson()));
 app.get("/tasks/:id", (req, res) => {
@@ -30,7 +35,7 @@ app.get("/tasks/:id", (req, res) => {
 app.post("/tasks", (req, res) => {
   const task = req.body as Task;
   if (!task.summary) {
-    res.type("json").status(422).send("Summary is requred");
+    res.type("json").status(422).send("Summary is required");
     return;
   }
   task.id = Date.now();
@@ -71,7 +76,7 @@ app.patch("/tasks/:id", (req, res) => {
     tasks[taskIndex] = task;
 
     writeTasksToJson(tasks);
-    res.type("json").status(202).send(task);
+    res.type("application/json").status(202).send(task);
   }
 });
 // app.put("/tasks/:id");
