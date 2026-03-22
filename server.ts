@@ -1,68 +1,66 @@
+import { config } from "dotenv";
+config();
+
 import express from "express";
-import fs from "fs";
 import type Task from "./types/task.js";
 import swaggerUi from "swagger-ui-express";
 import YAML from "yamljs";
-
-function readTasksFromJson() {
-  const raw = fs.readFileSync("./data/task.json").toString();
-  const tasks = JSON.parse(raw) as Task[];
-  return tasks;
-}
-function writeTasksToJson(tasks: Task[]) {
-  fs.writeFileSync("./data/task.json", JSON.stringify(tasks));
-}
+import db from "./db/db.js";
 
 const app = express();
 const spec = YAML.load("./openapi.yaml");
 app.use(express.json());
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(spec));
 
-app.get("/openapi.json", (req, res) => res.json(spec));
+app.get("/openapi.json", (_req, res) => res.json(spec));
 
-app.get("/tasks", (req, res) => res.type("json").send(readTasksFromJson()));
-app.get("/tasks/:id", (req, res) => {
+app.get("/tasks", async (_req, res) => {
+  const tasks = await db.pool.query<Task>("SELECT * FROM tasks");
+  res.type("json").send(tasks.rows);
+});
+app.get("/tasks/:id", async (req, res) => {
   const id = req.params.id;
-  const tasks = readTasksFromJson();
-  const task = tasks.find((task) => task.id.toString() === id);
-  if (!task) {
+  const tasks = await db.pool.query<Task>(`SELECT * FROM tasks WHERE id=$1`, [
+    id,
+  ]);
+
+  if (tasks.rows.length === 0) {
     res.type("text").status(404).send("Task not found");
   } else {
-    res.json(task);
+    res.json(tasks.rows[0]);
   }
 });
 
-app.post("/tasks", (req, res) => {
+app.post("/tasks", async (req, res) => {
   const task = req.body as Task;
   if (!task.summary) {
     res.type("json").status(422).send("Summary is required");
     return;
   }
-  task.id = Date.now();
   if (task.completed === null || task.completed === undefined) {
     task.completed = false;
   }
   if (!task.details) {
     task.details = null;
   }
-
-  const tasks = readTasksFromJson();
-
-  tasks.push(task);
-
-  writeTasksToJson(tasks);
-  res.type("json").status(201).send(task);
+  const createdTaskResult = await db.pool.query(
+    `INSERT INTO tasks(summary,details,completed) VALUES($1,$2, $3) RETURNING *`,
+    [task.summary, task.details, task.completed],
+  );
+  res.type("json").status(201).send(createdTaskResult.rows[0]);
 });
 
-app.patch("/tasks/:id", (req, res) => {
+app.patch("/tasks/:id", async (req, res) => {
   const id = req.params.id;
-  const tasks = readTasksFromJson();
-  const taskIndex = tasks.findIndex((task) => task.id.toString() === id);
-  const task = tasks[taskIndex];
-  if (!task) {
+  const tasks = await db.pool.query<Task>(`SELECT * FROM tasks WHERE id=$1`, [
+    id,
+  ]);
+
+  if (tasks.rowCount === 0) {
     res.type("text").status(404).send("Task not found");
   } else {
     const payload = req.body;
+    const task = tasks.rows[0]!;
     if (payload.summary) {
       task.summary = payload.summary;
     }
@@ -73,37 +71,31 @@ app.patch("/tasks/:id", (req, res) => {
       task.details = payload.details;
     }
 
-    tasks[taskIndex] = task;
+    const updatedTaskResult = await db.pool.query(
+      `UPDATE tasks SET summary=$1, details=$2,completed=$3 WHERE id=$4 RETURNING *`,
+      [task.summary, task.details, task.completed, task.id],
+    );
 
-    writeTasksToJson(tasks);
-    res.type("application/json").status(202).send(task);
+    res.type("application/json").status(202).send(updatedTaskResult.rows[0]);
   }
 });
-// app.put("/tasks/:id");
 
-app.delete("/tasks/:id", (req, res) => {
+app.delete("/tasks/:id", async (req, res) => {
   const id = req.params.id;
-  const tasks = readTasksFromJson();
-  const taskIndex = tasks.findIndex((task) => task.id.toString() === id);
+  const tasks = await db.pool.query<Task>(`SELECT * FROM tasks WHERE id=$1`, [
+    id,
+  ]);
 
-  if (taskIndex === -1) {
+  if (tasks.rowCount === 0) {
     res.type("text").status(404).send("Task not found");
   } else {
-    tasks.splice(taskIndex, 1);
-    writeTasksToJson(tasks);
+    await db.pool.query(`DELETE FROM tasks WHERE id=$1`, [id]);
     res.status(204).end();
   }
-});
-
-app.use((req, res) => {
-  res
-    .status(404)
-    .type("application/json")
-    .send({ statusCode: 404, message: "Not Found" });
 });
 
 const PORT = Number(process.env.PORT ?? 3000);
 
 app.listen(PORT, () => {
-  console.log(`Server listening on http://localhost: ${PORT}`);
+  console.log(`Server listening on http://localhost:${PORT}`);
 });
